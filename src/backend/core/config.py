@@ -83,4 +83,15 @@ class Settings(BaseSettings):
     )
 
 
+
+    # --- Logging Settings ---
+    log_level: str = Field(default="DEBUG")
+    
+    log_file: str = Field(default="./logs/app.log")
+
+    log_max_bytes: int = Field(default=5_000_000)
+
+    log_backup_count: int = Field(default=3)
+
+
 settings = Settings()
