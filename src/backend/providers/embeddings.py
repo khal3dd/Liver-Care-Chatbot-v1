@@ -9,13 +9,15 @@ class EmbeddingsProvider:
  
 
     def __init__(self) -> None:
+        
         logger.info(f"Loading embedding model: {settings.embedding_model}")
         self._model = SentenceTransformer(settings.embedding_model)
         logger.info("Embedding model loaded successfully ✅")
 
-    def embed(self, texts: list[str]) -> list[list[float]]:
+    def embed(self, texts: list[str]) -> list[list[float]]: 
       
         if not texts:
+            logger.warning("Embed called with empty text list. Skipping...")
             return []
 
         logger.debug(f"Embedding {len(texts)} texts...")
