@@ -5,13 +5,14 @@ from core.prompts import build_system_prompt, format_user_message, build_rag_use
 from enums.chat import MessageRole
 from schemas.chat import ConversationMessage
 
+# الربط مع المونجو - تأكد إن المسار ده صح عندك
+from database.mongodb import sessions_collection
+
 logger = get_logger(__name__)
 
-
 class ChatSession:
-
-    def __init__(self, max_turns: int):
-        self.messages: list[ConversationMessage] = []
+    def __init__(self, max_turns: int, messages: list = None):
+        self.messages: list[ConversationMessage] = messages or []
         self.max_entries = max_turns * 2
 
     def add_turn(self, user_msg: str, assistant_reply: str):
@@ -30,32 +31,34 @@ class ChatSession:
 
 
 class ChatService:
-
     def __init__(self, llm_provider: LLMProvider) -> None:
         self._llm = llm_provider
-        self._system_prompt = build_system_prompt()
-        self._sessions: dict[str, ChatSession] = {}
         logger.info("ChatService initialized.")
 
-    def handle_message(
+    async def handle_message(
         self,
         session_id: str,
         user_message: str,
         context: str | None = None,
+        tenant_id: str = "general",
     ) -> dict:
-        session = self._get_session(session_id)
+        # 1. جلب السيشن من المونجو
+        session = await self._get_session(session_id)
+        
         clean_message = format_user_message(user_message)
+        system_prompt = build_system_prompt(tenant_id)
 
         if context:
             final_message = build_rag_user_message(clean_message, context)
-            logger.info(f"RAG mode | session={session_id} | turns={session.turn_count}")
+            logger.info(f"RAG mode | tenant={tenant_id} | session={session_id} | turns={session.turn_count}")
         else:
             final_message = clean_message
-            logger.info(f"General mode | session={session_id} | turns={session.turn_count}")
+            logger.info(f"General mode | tenant={tenant_id} | session={session_id} | turns={session.turn_count}")
 
         try:
+            # 2. نداء الـ LLM
             reply = self._llm.chat(
-                system_prompt=self._system_prompt,
+                system_prompt=system_prompt,
                 history=session.messages,
                 user_message=final_message,
             )
@@ -63,10 +66,17 @@ class ChatService:
             logger.error(f"LLM call failed | session={session_id} | error={e}")
             raise RuntimeError("LLM call failed") from e
 
+        # 3. تحديث الكلاس وحفظه في المونجو
         session.add_turn(clean_message, reply)
+        
+        await sessions_collection.update_one(
+            {"session_id": session_id},
+            {"$set": {"messages": [m.model_dump() if hasattr(m, 'model_dump') else m.dict() for m in session.messages]}},
+            upsert=True
+        )
 
         logger.info(
-            f"Reply generated | session={session_id} "
+            f"Reply generated | tenant={tenant_id} | session={session_id} "
             f"| turns={session.turn_count} "
             f"| reply_len={len(reply)}"
         )
@@ -77,26 +87,27 @@ class ChatService:
             "turn_count": session.turn_count,
         }
 
-    def clear_session(self, session_id: str) -> bool:
-        if session_id in self._sessions:
-            del self._sessions[session_id]
-            logger.info(f"Session cleared: {session_id}")
-            return True
-        logger.debug(f"Clear called on non-existent session: {session_id}")
-        return False
+    async def _get_session(self, session_id: str) -> ChatSession:
+        doc = await sessions_collection.find_one({"session_id": session_id})
+        messages = []
+        if doc:
+            messages = [ConversationMessage(**m) for m in doc.get("messages", [])]
+        
+        return ChatSession(
+            max_turns=settings.session_max_turns,
+            messages=messages
+        )
 
-    def session_exists(self, session_id: str) -> bool:
-        return session_id in self._sessions
-
-    def get_turn_count(self, session_id: str) -> int:
-        if session_id in self._sessions:
-            return self._sessions[session_id].turn_count
+    async def get_turn_count(self, session_id: str) -> int:
+        doc = await sessions_collection.find_one({"session_id": session_id})
+        if doc:
+            return len(doc.get("messages", [])) // 2
         return 0
 
-    def _get_session(self, session_id: str) -> ChatSession:
-        if session_id not in self._sessions:
-            self._sessions[session_id] = ChatSession(
-                max_turns=settings.session_max_turns
-            )
-            logger.debug(f"New session created: {session_id}")
-        return self._sessions[session_id]
+    async def clear_session(self, session_id: str) -> bool:
+        result = await sessions_collection.delete_one({"session_id": session_id})
+        return result.deleted_count > 0
+
+    async def session_exists(self, session_id: str) -> bool:
+        count = await sessions_collection.count_documents({"session_id": session_id})
+        return count > 0
