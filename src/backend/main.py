@@ -17,6 +17,9 @@ from services.orchestrator import Orchestrator
 from routers.chat import chat_router, set_chat_service
 from routers.ingestion import ingestion_router, set_ingestion_service
 
+# --- الإضافة الجديدة للهياكل اللي عملناها ---
+from database.mongodb import check_database_connection 
+
 logger = get_logger(__name__)
 
 _FRONTEND_DIR = Path(__file__).resolve().parents[1] / "frontend"
@@ -25,6 +28,16 @@ _FRONTEND_DIR = Path(__file__).resolve().parents[1] / "frontend"
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     logger.info("=== Medical Platform starting up ===")
+    
+    # --- التأكد من اتصال المونجو عند التشغيل ---
+    logger.info("Checking MongoDB connection...")
+    is_connected = await check_database_connection()
+    if is_connected:
+        logger.info(f"MongoDB connected to: {settings.MONGODB_DATABASE}")
+    else:
+        logger.error("MongoDB connection FAILED. Please check Docker.")
+    # ----------------------------------------
+
     logger.info(f"Model: {settings.llm_model}")
     logger.info(f"Max tokens: {settings.llm_max_tokens}")
     logger.info(f"Temperature: {settings.llm_temperature}")

@@ -69,3 +69,5 @@ logs/
 # --- Vector Database (RAG) ---
 vector_store/
 *.sqlite3
+
+docker/mongodb_data/

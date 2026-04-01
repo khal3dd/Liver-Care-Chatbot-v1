@@ -45,9 +45,7 @@ def set_chat_service(service: ChatService) -> None:
 
 
 def get_tenant_id(x_tenant_id: str | None = Header(default=None)) -> str:
-    """
-    بياخد الـ tenant من الـ header ويتحقق منه.
-    """
+    
     if not x_tenant_id:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -73,7 +71,7 @@ async def chat(
     logger.info(f"POST /api/chat | tenant={tenant_id} | session={request.session_id}")
 
     try:
-        result = service.handle_message(
+        result = await service.handle_message(
             session_id=request.session_id,
             user_message=request.message,
             tenant_id=tenant_id,
@@ -131,3 +129,14 @@ async def clear_session(
 )
 async def health_check() -> HealthResponse:
     return HealthResponse(status="ok", service="Medical Platform")
+
+
+@chat_router.get("/{session_id}/history")
+async def get_history(session_id: str, service: ChatService = Depends(get_chat_service)):
+    try:
+        session = await service.chat_memory._get_session(session_id)
+        if not session:
+            return []
+        return [{"role": m["role"], "content": m["content"]} for m in session.messages]
+    except AttributeError:
+        return []

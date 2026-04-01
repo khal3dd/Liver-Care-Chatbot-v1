@@ -19,7 +19,7 @@ class Orchestrator:
         self._chat_service = chat_service
         logger.info("Orchestrator initialized.")
 
-    def handle_message(
+    async def handle_message(
         self,
         session_id: str,
         user_message: str,
@@ -42,10 +42,13 @@ class Orchestrator:
 
         logger.info(f"Context built | tenant={tenant_id} | session={session_id} | chunks={len(chunks)}")
 
-        result = self._chat_service.handle_message(
+        # --- التعديل الجوهري هنا ---
+        # بما إن ChatService بقت بتكلم MongoDB فهي بقت async، ولازم نستخدم await
+        result = await self._chat_service.handle_message(
             session_id=session_id,
             user_message=user_message,
             context=context if chunks else None,
+            tenant_id=tenant_id,  # ضفنا دي عشان الـ ChatService يعرف الـ tenant
         )
 
         result["retrieved_chunks"] = len(chunks)

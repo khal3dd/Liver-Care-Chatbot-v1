@@ -93,8 +93,11 @@ class Settings(BaseSettings):
     # --- Multi-tenancy Settings ---
     allowed_tenants: list[str] = Field(
     default=["liver", "cardiology", "nephrology"],
-    description="List of allowed tenant IDs for multi-tenancy support",
-)
+    description="List of allowed tenant IDs for multi-tenancy support", )
+
+
+    MONGODB_URL: str   
+    MONGODB_DATABASE: str = "chatbot_db"
 
 
 settings = Settings()
