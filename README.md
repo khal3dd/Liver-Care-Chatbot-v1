@@ -1,4 +1,4 @@
-# ⚕️ Medical Platform
+# ⚕️ Medical Chatbot
 
 A backend-first AI medical platform that provides **safe, educational health support** across multiple medical departments. Built with FastAPI + OpenRouter + RAG pipeline using ChromaDB and HuggingFace embeddings, with MongoDB for persistent session storage.
 
